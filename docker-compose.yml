@@ -1,0 +1,102 @@
+name: aegisml
+services:
+  postgres:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: aegis_local
+      POSTGRES_DB: aegis
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-mlflow.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegis"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  mlflow:
+    build:
+      context: .
+      dockerfile: infrastructure/containers/mlflow.Dockerfile
+    environment:
+      MLFLOW_SERVER_ALLOWED_HOSTS: "localhost:*,127.0.0.1:*,mlflow:*"
+      MLFLOW_ENABLE_TELEMETRY: "false"
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --workers=1
+      - --backend-store-uri=postgresql+psycopg://aegis:aegis_local@postgres:5432/mlflow
+      - --serve-artifacts
+      - --artifacts-destination=/mlflow/artifacts
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - mlflow-artifacts:/mlflow/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      start_period: 60s
+      retries: 20
+    restart: unless-stopped
+  inference:
+    profiles: [serving]
+    build:
+      context: .
+      dockerfile: infrastructure/containers/inference.Dockerfile
+    environment:
+      AEGIS_DATABASE_URL: postgresql+psycopg://aegis:aegis_local@postgres:5432/aegis
+      AEGIS_MLFLOW_TRACKING_URI: http://mlflow:5000
+      AEGIS_ENVIRONMENT: development
+      AEGIS_ACTOR: local-label-ingest
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      start_period: 60s
+      retries: 6
+    restart: unless-stopped
+  prometheus:
+    profiles: [serving]
+    image: prom/prometheus:v3.14.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+  grafana:
+    profiles: [serving]
+    image: grafana/grafana:13.2.2
+    environment:
+      GF_SECURITY_ADMIN_USER: aegis
+      GF_SECURITY_ADMIN_PASSWORD: aegis_local
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      AEGIS_PROMETHEUS_URL: http://prometheus:9090
+      AEGIS_DASHBOARD_PATH: /var/lib/grafana/dashboards
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+volumes:
+  postgres-data:
+  mlflow-artifacts:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,45 @@
+# Merge from repository root with docker-compose.yml. Separate metadata DB and Python runtime.
+services:
+  airflow-postgres:
+    profiles: [orchestration]
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow_local
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  airflow:
+    profiles: [orchestration]
+    build:
+      context: .
+      dockerfile: infrastructure/containers/airflow.Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow_local@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: aegis:admin
+      AEGIS_DATABASE_URL: postgresql+psycopg://aegis:aegis_local@postgres:5432/aegis
+      AEGIS_MLFLOW_TRACKING_URI: http://mlflow:5000
+      AEGIS_DATA_ROOT: /opt/aegis/data
+      AEGIS_ACTOR: airflow-worker
+      AEGIS_TEST_POSTGRES_URL: postgresql+psycopg://aegis:aegis_local@postgres:5432/aegis
+    volumes:
+      - airflow-state:/opt/airflow
+      - ./data:/opt/aegis/data
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+volumes:
+  airflow-postgres:
+  airflow-state:

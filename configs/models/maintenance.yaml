@@ -1,0 +1,29 @@
+name: maintenance-detector
+owner: industrial-engineering
+use_case: industrial-predictive-maintenance
+risk_level: high
+experiment: aegis-maintenance-baseline
+dataset:
+  name: maintenance-synthetic
+  seed: 42
+  samples: 12000
+  validation_fraction: 0.2
+  test_fraction: 0.2
+  generator_version: "1"
+features:
+  numeric: [temperature, vibration, pressure, rpm, voltage, current, operating_hours]
+  categorical: [machine_type]
+target: failure
+training:
+  seed: 42
+  threshold: 0.5
+  algorithms:
+    logistic_regression:
+      max_iter: 1000
+      class_weight: balanced
+    random_forest:
+      n_estimators: 100
+      max_depth: 10
+      min_samples_leaf: 3
+      class_weight: balanced
+      n_jobs: 1

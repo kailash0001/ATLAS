@@ -1,0 +1,11 @@
+version: "1"
+minimum_f1: 0.25
+minimum_recall: 0.3
+maximum_mape_percent: 10
+maximum_regression_ratio: 1.05
+maximum_p95_ms: 100
+maximum_latency_ratio: 3
+latency_samples: 50
+maximum_evidence_age_hours: 24
+maximum_verification_age_hours: 24
+maximum_approval_age_hours: 24

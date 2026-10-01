@@ -1,0 +1,12 @@
+autonomy_level: 1
+auto_rollback: true
+minimum_requests: 30
+minimum_observation_seconds: 60
+maximum_window_seconds: 900
+maximum_error_rate: 0.02
+maximum_p95_ms: 250
+require_labels: true
+minimum_labels: 20
+minimum_f1: 0.25
+minimum_recall: 0.3
+maximum_mape_percent: 10

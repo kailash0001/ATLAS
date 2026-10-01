@@ -1,0 +1,107 @@
+name: Aegis validation
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_USER: aegis
+          POSTGRES_PASSWORD: aegis_local
+          POSTGRES_DB: aegis
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aegis" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      AEGIS_TEST_POSTGRES_URL: postgresql+psycopg://aegis:aegis_local@localhost:5432/aegis
+      DO_NOT_TRACK: "1"
+      EVIDENTLY_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -c requirements.lock -e '.[dev,reliability]'
+      - run: python -m ruff check . && python -m ruff format --check .
+      - run: python -m pip check
+      - run: python -m pytest --cov=aegis --cov=apps --cov-report=xml
+      - name: Validate all workload configurations
+        run: |
+          aegis config-check --config configs/models/fraud.yaml
+          aegis config-check --config configs/models/maintenance.yaml
+          aegis config-check --config configs/models/energy.yaml
+      - name: Dependency vulnerability report
+        continue-on-error: true
+        run: |
+          python -m venv /tmp/aegis-audit
+          /tmp/aegis-audit/bin/pip install pip-audit==2.9.0
+          python -m pip freeze --exclude-editable > /tmp/aegis-dependencies.txt
+          /tmp/aegis-audit/bin/pip-audit -r /tmp/aegis-dependencies.txt -f json -o dependency-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-evidence
+          path: |
+            coverage.xml
+            dependency-audit.json
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f docker-compose.yml -f infrastructure/airflow/compose.yaml --profile orchestration config --quiet
+      - run: docker build -f infrastructure/containers/inference.Dockerfile -t aegis-inference:test .
+      - run: docker build -f infrastructure/containers/mlflow.Dockerfile -t aegis-mlflow:test .
+      - run: docker build -f infrastructure/containers/platform.Dockerfile -t aegis-platform:local .
+      - run: docker build -f infrastructure/containers/airflow.Dockerfile -t aegis-airflow:test .
+      - name: Parse Airflow DAG with real Airflow
+        run: >-
+          docker run --rm --entrypoint python aegis-airflow:test -c
+          "from airflow.models import DagBag; b=DagBag('/opt/aegis/dags',include_examples=False);
+          assert not b.import_errors,b.import_errors;
+          assert set(b.dags['aegis_retraining'].task_ids)=={'validate_dataset','train_register','evaluate_quality_gates'}"
+  console:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      AEGIS_CONTROL_TOKEN: ci-local-operator
+      AEGIS_DATABASE_URL: sqlite:///./.local-ci.db
+      AEGIS_CONTROLLER_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "24", cache: npm, cache-dependency-path: apps/console/package-lock.json}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: python -m pip install -c requirements.lock -e '.[dev]'
+      - run: aegis db upgrade
+      - run: npm ci
+        working-directory: apps/console
+      - run: npm run typecheck && npm run build
+        working-directory: apps/console
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/console
+      - name: Start local services
+        run: |
+          python -m uvicorn apps.control_api.main:create_app --factory --host 127.0.0.1 --port 8100 > /tmp/control-api.log 2>&1 &
+          npm --prefix apps/console run start > /tmp/console.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3100 && break || sleep 2; done
+      - run: npm test
+        working-directory: apps/console
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: {name: console-test-results, path: apps/console/test-results}
+  kind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1
+        with: {cluster_name: aegis, config: infrastructure/kind/cluster.yaml}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: python scripts/kubernetes.py deploy
+      - run: curl --retry 10 --retry-delay 3 --retry-all-errors --fail http://127.0.0.1:18100/health/ready

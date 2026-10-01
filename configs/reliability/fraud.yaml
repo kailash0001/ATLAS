@@ -1,0 +1,10 @@
+version: "1"
+ranges:
+  amount: [0, 10000000]
+  hour: [0, 23]
+  distance_from_home: [0, 20000]
+  transactions_24h: [0, 10000]
+  account_age_days: [0, 36500]
+categories:
+  merchant_category: [grocery, travel, electronics, entertainment]
+  card_present: ["yes", "no"]

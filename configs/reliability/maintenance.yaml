@@ -1,0 +1,20 @@
+version: "1"
+minimum_rows: 100
+minimum_labels: 100
+minimum_label_coverage: 0.8
+null_fraction: 0.01
+invalid_fraction: 0.01
+outlier_fraction: 0.05
+drift_distance: 0.15
+critical_drift_distance: 0.4
+f1_drop: 0.1
+ranges:
+  temperature: [-20, 150]
+  vibration: [0, 20]
+  pressure: [0, 250]
+  rpm: [0, 4000]
+  voltage: [180, 270]
+  current: [0, 40]
+  operating_hours: [0, 100000]
+categories:
+  machine_type: [pump, compressor, motor]

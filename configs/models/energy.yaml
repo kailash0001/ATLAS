@@ -1,0 +1,26 @@
+name: energy-demand
+owner: energy-operations
+use_case: hourly-energy-demand-forecasting
+risk_level: medium
+experiment: aegis-energy-baseline
+dataset:
+  name: energy-synthetic
+  seed: 42
+  samples: 12000
+  validation_fraction: 0.2
+  test_fraction: 0.2
+  generator_version: "1"
+features:
+  numeric: [hour, day_of_week, forecast_temperature, forecast_occupancy, lag_24h_kw]
+  categorical: []
+target: demand_kw
+training:
+  seed: 42
+  algorithms:
+    ridge:
+      alpha: 1.0
+    random_forest_regressor:
+      n_estimators: 100
+      max_depth: 12
+      min_samples_leaf: 3
+      n_jobs: 1

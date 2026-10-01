@@ -1,0 +1,9 @@
+version: "1"
+mape_increase_points: 5.0
+ranges:
+  hour: [0, 23]
+  day_of_week: [0, 6]
+  forecast_temperature: [-40, 60]
+  forecast_occupancy: [0, 200]
+  lag_24h_kw: [0, 2000]
+categories: {}

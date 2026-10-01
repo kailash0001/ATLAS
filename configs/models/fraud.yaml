@@ -1,0 +1,30 @@
+name: fraud-detector
+owner: risk-engineering
+use_case: financial-fraud-detection
+risk_level: high
+experiment: aegis-fraud-baseline
+dataset:
+  name: fraud-synthetic
+  seed: 42
+  samples: 12000
+  validation_fraction: 0.2
+  test_fraction: 0.2
+  generator_version: "1"
+features:
+  numeric: [amount, hour, distance_from_home, transactions_24h, account_age_days]
+  categorical: [merchant_category, card_present]
+target: is_fraud
+training:
+  seed: 42
+  threshold: 0.5
+  algorithms:
+    logistic_regression:
+      C: 1.0
+      max_iter: 1000
+      class_weight: balanced
+    random_forest:
+      n_estimators: 150
+      max_depth: 12
+      min_samples_leaf: 3
+      class_weight: balanced
+      n_jobs: 1

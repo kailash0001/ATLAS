@@ -1,0 +1,14 @@
+{
+  "prometheus": {
+    "version": "3.14.0",
+    "url": "https://github.com/prometheus/prometheus/releases/download/v3.14.0/prometheus-3.14.0.windows-amd64.zip",
+    "sha256": "e57fbb99e4d0bc734d2f2b3aeb68c02fba38862259dc99a95c27ea46d9ccba0a",
+    "executable": "prometheus.exe"
+  },
+  "grafana": {
+    "version": "13.2.2",
+    "url": "https://dl.grafana.com/grafana/release/13.2.2/grafana_13.2.2_34846740809_windows_amd64.tar.gz",
+    "sha256": "3372d0577aa271b7d724fba7e402bc90f49653f86827900fea4a12ad67b46da5",
+    "executable": "grafana.exe"
+  }
+}
